@@ -16,6 +16,9 @@
 
 ## Written by Brad Hand 12/15/2022
 ## Updated by Brad Hand 09/28/2023 - Changed from adding On-Prem Exch Mailbox to enabling O365 remote mailbox.
+## Updated by Brad Hand 01/04/2024 - Changed location of the AddUsers.csv file to point directly to the file on OSLA09
+## Updated by Brad Hand 03/11/2024 - Renamed file from ADBulkAdd.ps1 to CreateNewUser.ps1
+## Updated by Brad Hand 03/19/2024 - Added ability to gather and verify admin credentials so script can be run without launching an administrative powershell session. 
 
 
 ## $Session, $UPN, -HomeDirectory, -UserPrincipalName and Enable-RemoteMailbox commands will need edited to support your environment. Also you may want to change the location of the $ADUsers file.
@@ -24,6 +27,38 @@
 
 # Import AD Module
 Import-Module ActiveDirectory
+
+# Gather and verify Admin Credentials. Give user 3 tries before exiting script.
+$Stoploop = $false
+[int]$Retrycount = "1"
+ 
+do {
+    try {
+        try {$credentials = Get-Credential}
+        catch {exit}
+        $Username = $credentials.GetNetworkCredential().UserName
+        If (Get-ADUser -F {SamAccountName -eq $Username} -Credential $credentials){
+        Write-Host "Credentials Validated" -ForegroundColor Green
+        }
+        $Stoploop = $true
+    }
+    catch {
+        if ($Retrycount -eq 3){
+            Write-Host "Logon Failed. Attempt $Retrycount of 3." -ForegroundColor Red
+            $Shell = New-Object -ComObject "WScript.Shell"
+            $Button = $Shell.Popup("Logon failed 3 times, click OK to exit.", 0, "Error", 48)
+            $Stoploop = $true
+            exit
+        }
+        else {
+            Write-Host "Logon Failed, please try again. Attempt $Retrycount of 3." -ForegroundColor Red
+            $Retrycount = $Retrycount + 1
+        }
+    }
+}
+
+While ($Stoploop -eq $false)
+
 
 #Create connection with Exchange Server and import only the Enable-Mailbox command
 $Session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri "YOUR_EXCHANGE_SERVER_ADDRESS" -Authentication Kerberos
