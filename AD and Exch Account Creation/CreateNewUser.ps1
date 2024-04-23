@@ -19,6 +19,7 @@
 ## Updated by Brad Hand 01/04/2024 - Changed location of the AddUsers.csv file to point directly to the file on OSLA09
 ## Updated by Brad Hand 03/11/2024 - Renamed file from ADBulkAdd.ps1 to CreateNewUser.ps1
 ## Updated by Brad Hand 03/19/2024 - Added ability to gather and verify admin credentials so script can be run without launching an administrative powershell session. 
+## Updated by Brad Hand 04/23/2024 - Added commands to create the user's Home Folder and assign user as Owner with Full Control.
 
 
 ## $Session, $UPN, -HomeDirectory, -UserPrincipalName and Enable-RemoteMailbox commands will need edited to support your environment. Also you may want to change the location of the $ADUsers file.
@@ -119,8 +120,21 @@ foreach ($User in $ADUsers) {
             -Title $JobTitle `
             -AccountPassword (ConvertTo-secureString $password -AsPlainText -Force) -ChangePasswordAtLogon $True
 
-        #Create Exchange Mailbox
-        #Enable-Mailbox -Identity $username
+        ##Create the Home Folder for the user and assign user as Owner with Full Control
+        Invoke-Command -ComputerName FileShareServer -Credential $credential -ScriptBlock { 
+            New-Item -Path "\\Path_To_FileShare" -Name $using:username -ItemType Directory
+    
+            $acl = Get-Acl "\\Path_To_FileShare\$using:username"
+            $inherit = [system.security.accesscontrol.InheritanceFlags]"ContainerInherit, ObjectInherit"
+            $propagation = [system.security.accesscontrol.PropagationFlags]"none"
+            $owner = New-Object System.Security.Principal.Ntaccount ("DOMAIN",$using:username)
+            $accessRule = New-Object System.Security.AccessControl.FileSystemAccessRule("$using:username","FullControl",$inherit,$propagation,"Allow")
+            $acl.SetAccessRule($AccessRule)
+            $acl.SetOwner($owner)
+            $acl | Set-Acl "\\Path_To_FileShare\$using:username"
+    
+        }
+
 
         # If user is created, show message.
         Write-Host "The user account $username is created." -ForegroundColor Cyan
